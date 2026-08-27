@@ -7,12 +7,10 @@ class Config:
     TOKEN = os.getenv('BOT_TOKEN')
     ADMIN_ID = os.getenv('ADMIN_ID')
     
-    # Game settings
     STARTING_COINS = 1000
     DAILY_BONUS = 100
     TRANSACTION_FEE = 0.01
     
-    # Cryptocurrencies in game
     CRYPTO = {
         'BTC': {'name': 'Bitcoin', 'icon': '🟡'},
         'ETH': {'name': 'Ethereum', 'icon': '🔷'},
@@ -21,7 +19,6 @@ class Config:
         'DOT': {'name': 'Polkadot', 'icon': '🟠'}
     }
     
-    # Initial prices (will be updated by mock market)
     INITIAL_PRICES = {
         'BTC': 42000,
         'ETH': 2800,
