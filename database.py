@@ -3,9 +3,16 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
 from config import Config
+import json
 
 Base = declarative_base()
-engine = create_engine(Config.DATABASE_URL)
+
+# Create engine with SQLite support
+if Config.DATABASE_URL.startswith('sqlite:///'):
+    engine = create_engine(Config.DATABASE_URL, connect_args={'check_same_thread': False})
+else:
+    engine = create_engine(Config.DATABASE_URL)
+
 Session = sessionmaker(bind=engine)
 
 class User(Base):
@@ -15,7 +22,7 @@ class User(Base):
     telegram_id = Column(Integer, unique=True, nullable=False)
     username = Column(String)
     coins = Column(Float, default=Config.STARTING_COINS)
-    portfolio = Column(JSON, default={})  # {'BTC': 0, 'ETH': 0, ...}
+    portfolio = Column(String, default=json.dumps({crypto: 0 for crypto in Config.CRYPTO.keys()}))
     total_invested = Column(Float, default=0)
     last_daily = Column(DateTime)
     created_at = Column(DateTime, default=datetime.utcnow)
