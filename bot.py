@@ -1,10 +1,11 @@
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 from config import Config
 from database import init_db, Session, User
 from game_logic import GameLogic
 import json
+import os
 
 # Setup logging
 logging.basicConfig(
@@ -14,7 +15,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Initialize database
-init_db()
+try:
+    init_db()
+    logger.info("✅ Database initialized successfully")
+except Exception as e:
+    logger.error(f"❌ Database initialization failed: {e}")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -83,7 +88,12 @@ async def daily(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     session = Session()
-    users = session.query(User).order_by(User.coins.desc()).limit(10).all()
+    try:
+        users = session.query(User).order_by(User.coins.desc()).limit(10).all()
+    except Exception as e:
+        await update.message.reply_text("❌ Error fetching leaderboard")
+        logger.error(f"Leaderboard error: {e}")
+        return
     
     leaderboard_text = "🏆 *TOP TRADERS* 🏆\n\n"
     
@@ -97,9 +107,9 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if amount > 0:
                 total_value += amount * prices[crypto]
         
-        medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉"
+        medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
         username = user.username or f"Player_{user.telegram_id}"
-        leaderboard_text += f"{medal} #{i} *{username}*: ${total_value:.2f}\n"
+        leaderboard_text += f"{medal} *{username}*: ${total_value:.2f}\n"
     
     await update.message.reply_text(leaderboard_text, parse_mode='Markdown')
 
@@ -173,13 +183,13 @@ async def trade_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Ask for amount
     context.user_data['action'] = action
     context.user_data['crypto'] = crypto
+    context.user_data['awaiting_amount'] = True
     
     await query.edit_message_text(
         f"💹 Enter the amount of {crypto} you want to {action}:\n\n"
         f"Example: 0.5 (for buying/selling 0.5 {crypto})",
         parse_mode='Markdown'
     )
-    context.user_data['awaiting_amount'] = True
 
 async def handle_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.user_data.get('awaiting_amount'):
@@ -209,6 +219,9 @@ async def handle_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     except ValueError:
         await update.message.reply_text("❌ Please enter a valid number!")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Error: {str(e)}")
+        logger.error(f"Trade error: {e}")
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = """
@@ -248,7 +261,11 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     game_user = GameLogic.get_user(user_id)
     
     session = Session()
-    total_players = session.query(User).count()
+    try:
+        total_players = session.query(User).count()
+    except Exception as e:
+        total_players = "Error"
+        logger.error(f"Stats error: {e}")
     
     portfolio = json.loads(game_user.portfolio)
     prices = GameLogic.get_current_prices()
@@ -274,7 +291,17 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     """Start the bot"""
-    application = Application.builder().token(Config.TOKEN).build()
+    # Check if token exists
+    if not Config.TOKEN:
+        logger.error("❌ BOT_TOKEN not set in environment variables!")
+        return
+    
+    try:
+        application = Application.builder().token(Config.TOKEN).build()
+        logger.info("✅ Bot application created successfully")
+    except Exception as e:
+        logger.error(f"❌ Failed to create bot application: {e}")
+        return
 
     # Command handlers
     application.add_handler(CommandHandler("start", start))
@@ -291,16 +318,14 @@ def main():
     application.add_handler(CallbackQueryHandler(trade_action, pattern="^(buy|sell)_"))
     
     # Message handler for amount input
-    application.add_handler(CommandHandler("start", start))  # Reset state on start
-    application.add_handler(CallbackQueryHandler(trade_callback, pattern="^trade_back"))
-    
-    # Handle amount input
-    from telegram.ext import MessageHandler, filters
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_amount))
 
     # Start the Bot
-    print("🚀 Bot is running...")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    logger.info("🚀 Bot is starting...")
+    try:
+        application.run_polling(allowed_updates=Update.ALL_TYPES)
+    except Exception as e:
+        logger.error(f"❌ Bot crashed: {e}")
 
 if __name__ == '__main__':
     main()
