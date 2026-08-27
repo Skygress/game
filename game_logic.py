@@ -14,8 +14,7 @@ class GameLogic:
         if not user:
             user = User(
                 telegram_id=telegram_id,
-                username=username,
-                portfolio=json.dumps({crypto: 0 for crypto in Config.CRYPTO.keys()})
+                username=username
             )
             session.add(user)
             session.commit()
@@ -24,14 +23,10 @@ class GameLogic:
     
     @staticmethod
     def get_current_prices():
-        """Mock market prices with random fluctuations"""
         base_prices = Config.INITIAL_PRICES.copy()
-        
         for crypto in base_prices:
-            # Random fluctuation between -5% and +5%
             change = random.uniform(-0.05, 0.05)
             base_prices[crypto] = round(base_prices[crypto] * (1 + change), 2)
-            
         return base_prices
     
     @staticmethod
@@ -52,7 +47,6 @@ class GameLogic:
         if user.coins < total_cost:
             return False, f"Insufficient coins. You need {total_cost:.2f} CRED"
         
-        # Update user
         portfolio = json.loads(user.portfolio)
         portfolio[crypto_symbol] = portfolio.get(crypto_symbol, 0) + amount
         
@@ -60,7 +54,6 @@ class GameLogic:
         user.portfolio = json.dumps(portfolio)
         user.total_invested += total_cost
         
-        # Log transaction
         transaction = Transaction(
             user_id=telegram_id,
             crypto=crypto_symbol,
@@ -94,12 +87,10 @@ class GameLogic:
         price = prices[crypto_symbol]
         total_value = amount * price * (1 - Config.TRANSACTION_FEE)
         
-        # Update user
         portfolio[crypto_symbol] = current_holding - amount
         user.portfolio = json.dumps(portfolio)
         user.coins += total_value
         
-        # Log transaction
         transaction = Transaction(
             user_id=telegram_id,
             crypto=crypto_symbol,
