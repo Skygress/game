@@ -1,11 +1,12 @@
 import os
 from dotenv import load_dotenv
+import json
 
 load_dotenv()
 
 class Config:
     TOKEN = os.getenv('BOT_TOKEN')
-    DATABASE_URL = os.getenv('DATABASE_URL')
+    DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///crypto_tycoon.db')
     ADMIN_ID = os.getenv('ADMIN_ID')
     
     # Game settings
