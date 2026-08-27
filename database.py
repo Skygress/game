@@ -8,7 +8,7 @@ import os
 
 Base = declarative_base()
 
-# Use SQLite only
+# Use SQLite only - works perfectly with Python 3.13
 DATABASE_URL = 'sqlite:///crypto_tycoon.db'
 engine = create_engine(DATABASE_URL, connect_args={'check_same_thread': False})
 Session = sessionmaker(bind=engine)
