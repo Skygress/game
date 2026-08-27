@@ -5,21 +5,15 @@ from config import Config
 from database import init_db, Session, User
 from game_logic import GameLogic
 import json
-import os
 
-# Setup logging
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize database
 try:
     init_db()
     logger.info("✅ Database initialized successfully")
 except Exception as e:
-    logger.error(f"❌ Database initialization failed: {e}")
+    logger.error(f"❌ Database init error: {e}")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -46,59 +40,45 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 💡 *Start trading now!* Use /trade to make your first move.
 """
-    
     await update.message.reply_text(welcome_text, parse_mode='Markdown')
 
 async def portfolio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     game_user = GameLogic.get_user(user_id)
-    
     prices = GameLogic.get_current_prices()
     portfolio = json.loads(game_user.portfolio)
     
-    portfolio_text = f"📊 *YOUR PORTFOLIO*\n\n"
-    portfolio_text += f"💵 *Cash:* {game_user.coins:.2f} CRED\n\n"
-    
+    text = f"📊 *YOUR PORTFOLIO*\n\n💵 *Cash:* {game_user.coins:.2f} CRED\n\n"
     total_value = game_user.coins
+    
     for crypto, amount in portfolio.items():
         if amount > 0:
             current_price = prices[crypto]
             value = amount * current_price
             total_value += value
-            portfolio_text += f"{Config.CRYPTO[crypto]['icon']} *{crypto}*: {amount:.6f} (${current_price:.2f})\n"
+            text += f"{Config.CRYPTO[crypto]['icon']} *{crypto}*: {amount:.6f} (${current_price:.2f})\n"
     
-    portfolio_text += f"\n💰 *Total Value:* ${total_value:.2f}"
-    portfolio_text += f"\n📈 *Total Invested:* ${game_user.total_invested:.2f}"
-    
-    await update.message.reply_text(portfolio_text, parse_mode='Markdown')
+    text += f"\n💰 *Total Value:* ${total_value:.2f}"
+    text += f"\n📈 *Total Invested:* ${game_user.total_invested:.2f}"
+    await update.message.reply_text(text, parse_mode='Markdown')
 
 async def prices(update: Update, context: ContextTypes.DEFAULT_TYPE):
     prices = GameLogic.get_current_prices()
-    
-    price_text = "📈 *CURRENT MARKET PRICES*\n\n"
+    text = "📈 *CURRENT MARKET PRICES*\n\n"
     for crypto, price in prices.items():
-        price_text += f"{Config.CRYPTO[crypto]['icon']} *{crypto}*: ${price:.2f}\n"
-    
-    await update.message.reply_text(price_text, parse_mode='Markdown')
+        text += f"{Config.CRYPTO[crypto]['icon']} *{crypto}*: ${price:.2f}\n"
+    await update.message.reply_text(text, parse_mode='Markdown')
 
 async def daily(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    success, message = GameLogic.claim_daily(user_id)
+    success, message = GameLogic.claim_daily(update.effective_user.id)
     await update.message.reply_text(message)
 
 async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     session = Session()
-    try:
-        users = session.query(User).order_by(User.coins.desc()).limit(10).all()
-    except Exception as e:
-        await update.message.reply_text("❌ Error fetching leaderboard")
-        logger.error(f"Leaderboard error: {e}")
-        return
+    users = session.query(User).order_by(User.coins.desc()).limit(10).all()
     
-    leaderboard_text = "🏆 *TOP TRADERS* 🏆\n\n"
-    
+    text = "🏆 *TOP TRADERS* 🏆\n\n"
     for i, user in enumerate(users, 1):
-        # Calculate total portfolio value
         portfolio = json.loads(user.portfolio)
         prices = GameLogic.get_current_prices()
         total_value = user.coins
@@ -109,49 +89,35 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
         username = user.username or f"Player_{user.telegram_id}"
-        leaderboard_text += f"{medal} *{username}*: ${total_value:.2f}\n"
+        text += f"{medal} *{username}*: ${total_value:.2f}\n"
     
-    await update.message.reply_text(leaderboard_text, parse_mode='Markdown')
+    await update.message.reply_text(text, parse_mode='Markdown')
 
 async def trade_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = []
     for crypto in Config.CRYPTO:
-        keyboard.append([InlineKeyboardButton(
-            f"{Config.CRYPTO[crypto]['icon']} {crypto}",
-            callback_data=f"trade_{crypto}"
-        )])
-    
+        keyboard.append([InlineKeyboardButton(f"{Config.CRYPTO[crypto]['icon']} {crypto}", callback_data=f"trade_{crypto}")])
     keyboard.append([InlineKeyboardButton("🔙 Back", callback_data="trade_back")])
     
-    reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
         "🔄 *Select cryptocurrency to trade:*",
         parse_mode='Markdown',
-        reply_markup=reply_markup
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 async def trade_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    data = query.data
-    
-    if data == "trade_back":
-        await query.edit_message_text(
-            "Main menu - use /trade to start trading again",
-            parse_mode='Markdown'
-        )
+    if query.data == "trade_back":
+        await query.edit_message_text("Main menu - use /trade to start trading again")
         return
     
-    _, crypto = data.split('_')
-    context.user_data['trading_crypto'] = crypto
-    
-    # Show current price and balance
+    _, crypto = query.data.split('_')
     prices = GameLogic.get_current_prices()
     price = prices[crypto]
     user_id = update.effective_user.id
     game_user = GameLogic.get_user(user_id)
-    
     portfolio = json.loads(game_user.portfolio)
     holding = portfolio.get(crypto, 0)
     
@@ -161,8 +127,6 @@ async def trade_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🔙 Back", callback_data="trade_back")]
     ]
     
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
     await query.edit_message_text(
         f"{Config.CRYPTO[crypto]['icon']} *{crypto} Trading*\n\n"
         f"💰 Current Price: ${price:.2f}\n"
@@ -170,7 +134,7 @@ async def trade_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💵 Your Balance: {game_user.coins:.2f} CRED\n\n"
         f"*Select action:*",
         parse_mode='Markdown',
-        reply_markup=reply_markup
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 async def trade_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -178,9 +142,6 @@ async def trade_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     action, crypto = query.data.split('_')
-    user_id = update.effective_user.id
-    
-    # Ask for amount
     context.user_data['action'] = action
     context.user_data['crypto'] = crypto
     context.user_data['awaiting_amount'] = True
@@ -211,24 +172,19 @@ async def handle_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
             success, message = GameLogic.sell_crypto(user_id, crypto, amount)
         
         await update.message.reply_text(message)
-        
-        # Reset state
         context.user_data['awaiting_amount'] = False
-        context.user_data['action'] = None
-        context.user_data['crypto'] = None
         
     except ValueError:
         await update.message.reply_text("❌ Please enter a valid number!")
     except Exception as e:
         await update.message.reply_text(f"❌ Error: {str(e)}")
-        logger.error(f"Trade error: {e}")
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = """
 📚 *CRYPTO TYCOON - HELP*
 
 🎮 *GAME OVERVIEW*
-Build your virtual crypto empire by trading 5 cryptocurrencies. Start with 1000 CRED coins and grow your wealth!
+Build your virtual crypto empire by trading 5 cryptocurrencies. Start with 1000 CRED coins!
 
 📋 *COMMANDS*
 /start - Start the game
@@ -241,16 +197,13 @@ Build your virtual crypto empire by trading 5 cryptocurrencies. Start with 1000 
 /stats - View your statistics
 
 💡 *TIPS*
-• Buy when prices are low, sell when high
-• Check prices regularly for opportunities
+• Buy low, sell high
+• Check prices regularly
 • Claim daily bonus every 24 hours
 • Diversify your portfolio
 
 ⚠️ *DISCLAIMER*
-This is a *virtual trading game* only. No real money is involved. All prices are simulated for entertainment purposes.
-
-🔒 *PRIVACY*
-Your data is stored securely. We only track game progress and username.
+Virtual trading game only. No real money involved. All prices are simulated.
 
 *Enjoy the game!* 🚀
 """
@@ -259,13 +212,8 @@ Your data is stored securely. We only track game progress and username.
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     game_user = GameLogic.get_user(user_id)
-    
     session = Session()
-    try:
-        total_players = session.query(User).count()
-    except Exception as e:
-        total_players = "Error"
-        logger.error(f"Stats error: {e}")
+    total_players = session.query(User).count()
     
     portfolio = json.loads(game_user.portfolio)
     prices = GameLogic.get_current_prices()
@@ -275,7 +223,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if amount > 0:
             total_value += amount * prices[crypto]
     
-    stats_text = f"""
+    text = f"""
 📊 *YOUR STATISTICS*
 
 👤 Username: @{game_user.username or 'N/A'}
@@ -287,45 +235,30 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 *Keep trading!* 🚀
 """
-    await update.message.reply_text(stats_text, parse_mode='Markdown')
+    await update.message.reply_text(text, parse_mode='Markdown')
 
 def main():
-    """Start the bot"""
-    # Check if token exists
     if not Config.TOKEN:
-        logger.error("❌ BOT_TOKEN not set in environment variables!")
+        logger.error("❌ BOT_TOKEN not set!")
         return
     
-    try:
-        application = Application.builder().token(Config.TOKEN).build()
-        logger.info("✅ Bot application created successfully")
-    except Exception as e:
-        logger.error(f"❌ Failed to create bot application: {e}")
-        return
-
-    # Command handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("portfolio", portfolio))
-    application.add_handler(CommandHandler("prices", prices))
-    application.add_handler(CommandHandler("daily", daily))
-    application.add_handler(CommandHandler("leaderboard", leaderboard))
-    application.add_handler(CommandHandler("trade", trade_menu))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("stats", stats))
+    app = Application.builder().token(Config.TOKEN).build()
     
-    # Callback handlers
-    application.add_handler(CallbackQueryHandler(trade_callback, pattern="^trade_"))
-    application.add_handler(CallbackQueryHandler(trade_action, pattern="^(buy|sell)_"))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("portfolio", portfolio))
+    app.add_handler(CommandHandler("prices", prices))
+    app.add_handler(CommandHandler("daily", daily))
+    app.add_handler(CommandHandler("leaderboard", leaderboard))
+    app.add_handler(CommandHandler("trade", trade_menu))
+    app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("stats", stats))
     
-    # Message handler for amount input
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_amount))
-
-    # Start the Bot
+    app.add_handler(CallbackQueryHandler(trade_callback, pattern="^trade_"))
+    app.add_handler(CallbackQueryHandler(trade_action, pattern="^(buy|sell)_"))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_amount))
+    
     logger.info("🚀 Bot is starting...")
-    try:
-        application.run_polling(allowed_updates=Update.ALL_TYPES)
-    except Exception as e:
-        logger.error(f"❌ Bot crashed: {e}")
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':
     main()
