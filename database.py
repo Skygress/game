@@ -1,18 +1,16 @@
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, JSON
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
 from config import Config
 import json
+import os
 
 Base = declarative_base()
 
-# Create engine with SQLite support
-if Config.DATABASE_URL.startswith('sqlite:///'):
-    engine = create_engine(Config.DATABASE_URL, connect_args={'check_same_thread': False})
-else:
-    engine = create_engine(Config.DATABASE_URL)
-
+# Use SQLite only
+DATABASE_URL = 'sqlite:///crypto_tycoon.db'
+engine = create_engine(DATABASE_URL, connect_args={'check_same_thread': False})
 Session = sessionmaker(bind=engine)
 
 class User(Base):
