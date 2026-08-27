@@ -9,6 +9,7 @@ A virtual cryptocurrency trading game for Telegram. Build your crypto empire wit
 - 🏆 Leaderboard competition
 - 📈 Portfolio tracking
 - 💵 No real money involved
+- 🗄️ SQLite database (no PostgreSQL needed)
 
 ## Setup
 
@@ -21,10 +22,8 @@ A virtual cryptocurrency trading game for Telegram. Build your crypto empire wit
 - Fork this repository
 - Create a new project on Railway
 - Connect your GitHub repository
-- Add environment variables:
+- Add environment variable:
   - `BOT_TOKEN`: Your bot token
-  - `DATABASE_URL`: PostgreSQL URL (Railway provides this)
-  - `ADMIN_ID`: Your Telegram ID (optional)
 
 ### 3. Deploy
 Railway will automatically deploy your bot!
@@ -43,7 +42,7 @@ Railway will automatically deploy your bot!
 - Python 3.9+
 - python-telegram-bot
 - SQLAlchemy
-- PostgreSQL
+- SQLite
 - Railway
 
 ## Disclaimer
